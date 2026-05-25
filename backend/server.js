@@ -16,16 +16,15 @@ app.get("/health", (_req, res) => {
 
 // Debug endpoint — xóa sau khi fix
 app.get("/debug", async (_req, res) => {
-  const Groq = require("groq-sdk");
+  const axios = require("axios");
   const results = { groq_key: !!process.env.GROQ_API_KEY, brave_key: !!process.env.BRAVE_API_KEY };
   try {
-    const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
-    const r = await client.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      messages: [{ role: "user", content: "Say OK" }],
-      max_tokens: 5,
-    });
-    results.groq_test = r.choices[0].message.content;
+    const r = await axios.post(
+      "https://api.groq.com/openai/v1/chat/completions",
+      { model: "llama-3.1-8b-instant", messages: [{ role: "user", content: "Say OK" }], max_tokens: 5 },
+      { headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}`, "Content-Type": "application/json" }, timeout: 10000 }
+    );
+    results.groq_test = r.data.choices[0].message.content;
   } catch (e) {
     results.groq_error = e.message;
   }

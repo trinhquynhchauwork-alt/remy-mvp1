@@ -1,6 +1,4 @@
-const Groq = require("groq-sdk");
-
-const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const axios = require("axios");
 
 // Fallback chain: chất lượng cao → nhẹ hơn khi bị rate limit
 const MODELS = [
@@ -9,12 +7,25 @@ const MODELS = [
   "gemma2-9b-it",              // fallback 2
 ];
 
+// Dùng axios thay groq-sdk để tránh connection issue trên Vercel
 async function callGroq(params) {
   for (const model of MODELS) {
     try {
-      return await client.chat.completions.create({ ...params, model });
+      const res = await axios.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        { ...params, model },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          timeout: 30000,
+        }
+      );
+      return res.data;
     } catch (err) {
-      const is429 = err?.status === 429 || err?.message?.includes("rate_limit");
+      const status = err?.response?.status;
+      const is429 = status === 429 || err?.response?.data?.error?.code === "rate_limit_exceeded";
       if (is429 && model !== MODELS.at(-1)) {
         console.warn(`[groq] rate limit on ${model}, trying next model...`);
         continue;
