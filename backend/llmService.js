@@ -1,15 +1,23 @@
 const axios = require("axios");
 
-// Fallback chain: chất lượng cao → nhẹ hơn khi bị rate limit
-const MODELS = [
-  "llama-3.3-70b-versatile",   // primary — tốt nhất
-  "llama-3.1-8b-instant",      // fallback — nhanh, ít token hơn nhiều
-  "gemma2-9b-it",              // fallback 2
+// Chỉ dùng llama — gemma không hỗ trợ response_format: json_object
+const MODELS_JSON = [
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
+  "llama3-8b-8192",
+];
+const MODELS_CHAT = [
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
+  "llama3-8b-8192",
+  "gemma2-9b-it",   // ok cho chat thường (không cần json)
 ];
 
-// Dùng axios thay groq-sdk để tránh connection issue trên Vercel
 async function callGroq(params) {
-  for (const model of MODELS) {
+  const needsJson = !!params.response_format;
+  const models = needsJson ? MODELS_JSON : MODELS_CHAT;
+
+  for (const model of models) {
     try {
       const res = await axios.post(
         "https://api.groq.com/openai/v1/chat/completions",
@@ -26,8 +34,9 @@ async function callGroq(params) {
     } catch (err) {
       const status = err?.response?.status;
       const is429 = status === 429 || err?.response?.data?.error?.code === "rate_limit_exceeded";
-      if (is429 && model !== MODELS.at(-1)) {
-        console.warn(`[groq] rate limit on ${model}, trying next model...`);
+      const isRetryable = is429 || status === 503 || status === 400;
+      if (isRetryable && model !== models.at(-1)) {
+        console.warn(`[groq] ${status} on ${model}, trying next...`);
         continue;
       }
       throw err;
