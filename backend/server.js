@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const path = require("path");
-const { gatherReviews } = require("./searchService");
+const { gatherReviews, gatherReviewsQuick } = require("./searchService");
 const { extractDestination, analyzeReviews, chatFollowUp, detectNewDestination } = require("./llmService");
 
 const app = express();
@@ -72,8 +72,14 @@ app.post("/api/smart", async (req, res) => {
       });
       return res.json({ type: "analysis", data: result });
     } else {
+      // Follow-up: search thêm theo đúng câu hỏi cụ thể
+      const destination = context?.destination || "";
+      console.log(`[smart] follow-up search: "${destination} + ${message.slice(0, 40)}"`);
+      const extraData = await gatherReviewsQuick(destination, message);
+      console.log(`[smart] extra reviews: ${extraData.texts.length} texts`);
+
       const fullHistory = [...history, { role: "user", content: message }];
-      const reply = await chatFollowUp(fullHistory, context);
+      const reply = await chatFollowUp(fullHistory, context, extraData.texts);
       return res.json({ type: "chat", reply });
     }
   } catch (err) {

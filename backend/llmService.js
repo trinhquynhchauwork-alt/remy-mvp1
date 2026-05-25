@@ -183,40 +183,49 @@ async function detectNewDestination(message, currentDestination) {
 }
 
 // ── Follow-up chat ─────────────────────────────────────
-async function chatFollowUp(messages, context) {
+async function chatFollowUp(messages, context, extraReviews = []) {
   const ctxLines = context
     ? [
         `Địa điểm: "${context.destination}"`,
-        `\nTÓM TẮT TỪ REVIEW: ${context.neutral_summary || ""}`,
-        `\nNHỮNG GÌ REVIEWER THÍCH (với quote thật):`,
+        `\nTÓM TẮT TỪ REVIEW BAN ĐẦU: ${context.neutral_summary || ""}`,
+        `\nNHỮNG GÌ REVIEWER THÍCH:`,
         ...(context.liked || []).map((l) => `  • ${l.text} — "${l.quote}"`),
-        `\nPHÀN NÀN PHỔ BIẾN (với quote thật):`,
+        `\nPHÀN NÀN PHỔ BIẾN:`,
         ...(context.complaints || []).map((c) => `  • ${c.text} — "${c.quote}"`),
-        `\nPATTERNS PHÁT HIỆN TỪ REVIEW:`,
+        `\nPATTERNS:`,
         ...(context.truth_patterns || []).map((p) => `  • ${p.pattern}: ${p.insight}`),
-        `\nPHÙ HỢP VỚI: ${(context.traveler_fit?.best_for || []).join(", ")}`,
-        `KHÔNG PHÙ HỢP: ${(context.traveler_fit?.avoid_if || []).join(", ")}`,
       ].join("\n")
     : "Chưa có dữ liệu review nào được crawl.";
 
+  // Data mới tìm theo câu hỏi cụ thể
+  const extraCtx = extraReviews.length > 0
+    ? "\n\n--- DỮ LIỆU BỔ SUNG (tìm kiếm theo câu hỏi này) ---\n" +
+      extraReviews
+        .map((r, i) => {
+          const domain = (() => { try { return new URL(r.url).hostname.replace(/^www\./, ""); } catch { return r.url; } })();
+          return `[Nguồn ${i + 1}: ${domain}]\n${r.text.slice(0, 2000)}`;
+        })
+        .join("\n\n")
+        .slice(0, 5000)
+    : "";
+
   const systemPrompt =
     `Bạn là Remy, AI tổng hợp insight từ review du lịch thực tế.\n\n` +
-    `DỮ LIỆU CRAWL ĐƯỢC TỪ CÁC NGUỒN REVIEW:\n${ctxLines}\n\n` +
-    `RULES TUYỆT ĐỐI:\n` +
-    `- CHỈ trả lời dựa trên dữ liệu review đã crawl ở trên\n` +
-    `- KHÔNG dùng kiến thức chung, KHÔNG bịa đặt thông tin\n` +
-    `- Nếu dữ liệu crawl KHÔNG đề cập đến điều user hỏi → nói thẳng: "Mình chưa tìm thấy thông tin này trong các review đã đọc về [địa điểm]. Bạn thử hỏi trực tiếp trên các group du lịch nhé!"\n` +
-    `- Trích dẫn cụ thể từ review khi có thể (vd: "Theo review trên vnexpress...")\n` +
-    `- Ngắn gọn, thân thiện, dùng tiếng Việt\n` +
-    `- Nếu câu hỏi về địa điểm mới: "Hỏi tôi '[tên địa điểm] review' để tôi đi tìm thông tin nhé!"`;
+    `DỮ LIỆU CRAWL ĐƯỢC:\n${ctxLines}${extraCtx}\n\n` +
+    `RULES:\n` +
+    `- Ưu tiên trả lời từ "DỮ LIỆU BỔ SUNG" nếu có liên quan đến câu hỏi\n` +
+    `- Nếu không có data liên quan → nói thẳng: "Mình chưa tìm thấy thông tin này trong review về ${context?.destination || "địa điểm này"}"\n` +
+    `- CHỈ dùng thông tin từ dữ liệu crawl, KHÔNG bịa đặt\n` +
+    `- Trích dẫn nguồn khi có thể (vd: "Theo review trên traveloka...")\n` +
+    `- Ngắn gọn, thân thiện, tiếng Việt`;
 
   const res = await callGroq({
     messages: [
       { role: "system", content: systemPrompt },
-      ...messages.slice(-8), // keep last 8 turns
+      ...messages.slice(-8),
     ],
-    max_tokens: 450,
-    temperature: 0.75,
+    max_tokens: 500,
+    temperature: 0.7,
   });
 
   return res.choices[0].message.content.trim();

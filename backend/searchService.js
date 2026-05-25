@@ -170,4 +170,41 @@ async function gatherReviews(destination, maxExtract = 5) {
   return reviewData;
 }
 
-module.exports = { gatherReviews };
+// Quick search cho follow-up questions — 2 queries, tối đa 3 kết quả
+async function gatherReviewsQuick(destination, question) {
+  const queries = [
+    `${destination} ${question}`,
+    `site:facebook.com ${destination} ${question}`,
+  ];
+
+  const searchResults = await Promise.allSettled(
+    queries.map((q) => searchBrave(q, 5))
+  );
+
+  const allUrls = [];
+  for (const r of searchResults) {
+    if (r.status === "fulfilled") allUrls.push(...r.value);
+  }
+
+  const unique = [...new Map(allUrls.map((u) => [u, u])).values()];
+  const sorted = sortByQuality(unique);
+
+  const reviewData = { texts: [], sources_found: sorted.length };
+  if (!sorted.length) return reviewData;
+
+  const candidates = sorted.slice(0, 5);
+  const extractions = await Promise.allSettled(
+    candidates.map((url) => extractJina(url).then((text) => ({ url, text })))
+  );
+
+  for (const result of extractions) {
+    if (result.status === "fulfilled" && result.value.text) {
+      reviewData.texts.push(result.value);
+      if (reviewData.texts.length >= 3) break;
+    }
+  }
+
+  return reviewData;
+}
+
+module.exports = { gatherReviews, gatherReviewsQuick };
