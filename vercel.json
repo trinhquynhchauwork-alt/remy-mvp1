@@ -4,10 +4,15 @@
     {
       "src": "backend/server.js",
       "use": "@vercel/node",
-      "config": { "includeFiles": ["frontend/**"] }
+      "config": { "includeFiles": ["frontend/**"], "maxDuration": 60 }
     }
   ],
   "routes": [
     { "src": "/(.*)", "dest": "backend/server.js" }
-  ]
+  ],
+  "functions": {
+    "backend/server.js": {
+      "maxDuration": 60
+    }
+  }
 }

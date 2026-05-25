@@ -200,7 +200,6 @@ async function chatFollowUp(messages, context) {
     `- Nếu câu hỏi về địa điểm mới: "Hỏi tôi '[tên địa điểm] review' để tôi đi tìm thông tin nhé!"`;
 
   const res = await callGroq({
-    model: MODEL,
     messages: [
       { role: "system", content: systemPrompt },
       ...messages.slice(-8), // keep last 8 turns

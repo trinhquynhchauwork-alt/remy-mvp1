@@ -103,33 +103,33 @@ async function gatherReviews(destination, maxExtract = 5) {
   const queries = [
     `${destination} review đánh giá kinh nghiệm du lịch`,
     `${destination} có nên đi không ưu nhược điểm`,
-    `site:reddit.com ${destination} travel review`,
-    `site:facebook.com ${destination} review đánh giá`,
-    `${destination} google maps đánh giá nhận xét`,   // bài tổng hợp Google rating
+    `site:reddit.com ${destination} travel`,
+    `site:facebook.com ${destination} review`,
   ];
 
+  // Chạy tất cả Brave queries SONG SONG thay vì tuần tự → tiết kiệm ~30s
+  const searchResults = await Promise.allSettled(
+    queries.map((q) =>
+      searchBrave(q).then((urls) => {
+        console.log(`[search] "${q.slice(0, 40)}" → ${urls.length} URLs`);
+        return urls;
+      })
+    )
+  );
+
   const allUrls = [];
-  for (const q of queries) {
-    try {
-      const urls = await searchBrave(q);
-      allUrls.push(...urls);
-      console.log(`[search] "${q}" → ${urls.length} URLs`);
-    } catch (e) {
-      console.error(`[search] failed for "${q}":`, e.message);
-    }
+  for (const r of searchResults) {
+    if (r.status === "fulfilled") allUrls.push(...r.value);
   }
 
-  // Deduplicate
+  // Deduplicate + sort by quality
   const unique = [...new Map(allUrls.map((u) => [u, u])).values()];
   const sorted = sortByQuality(unique);
 
   const reviewData = { urls: sorted, texts: [], sources_found: sorted.length };
   if (!sorted.length) return reviewData;
 
-  // Thử Google Maps song song với các nguồn khác (non-blocking)
-  const mapsPromise = fetchGoogleMapsReviews(destination);
-
-  // Cap per-domain để đa dạng nguồn (max 2 từ cùng 1 domain)
+  // Cap per-domain để đa dạng nguồn
   const domainCount = {};
   const balanced = [];
   for (const url of sorted) {
@@ -141,30 +141,19 @@ async function gatherReviews(destination, maxExtract = 5) {
     if (balanced.length >= maxExtract + 3) break;
   }
 
-  // Extract in parallel (up to maxExtract+3 candidates)
+  // Extract in parallel
   const candidates = balanced.slice(0, maxExtract + 3);
-  const extractions = await Promise.allSettled(candidates.map((url) => extractJina(url).then((text) => ({ url, text }))));
+  const extractions = await Promise.allSettled(
+    candidates.map((url) => extractJina(url).then((text) => ({ url, text })))
+  );
 
   for (const result of extractions) {
     if (result.status === "fulfilled" && result.value.text) {
       reviewData.texts.push(result.value);
-      console.log(`[jina] extracted ${result.value.text.length} chars from ${result.value.url}`);
+      console.log(`[jina] ${result.value.text.length} chars from ${result.value.url}`);
       if (reviewData.texts.length >= maxExtract) break;
     }
   }
-
-  // Chờ Google Maps result — thêm vào nếu có (không giới hạn slot)
-  try {
-    const mapsResult = await mapsPromise;
-    if (mapsResult) {
-      reviewData.texts.push(mapsResult);
-      reviewData.urls.unshift(mapsResult.url); // đẩy lên đầu URL list
-      reviewData.sources_found += 1;
-      console.log(`[maps] added Google Maps source`);
-    } else {
-      console.log(`[maps] no extractable Google Maps content`);
-    }
-  } catch {}
 
   return reviewData;
 }
