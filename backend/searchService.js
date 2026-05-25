@@ -3,21 +3,30 @@ const axios = require("axios");
 const BRAVE_API_KEY = process.env.BRAVE_API_KEY;
 const JINA_BASE = "https://r.jina.ai/";
 
-// facebook.com public posts (indexed bởi Google) Jina đọc được → giữ lại
-// Private posts/groups sẽ tự trả về null và bị bỏ qua
 const SKIP_DOMAINS = ["youtube.com", "twitter.com", "instagram.com", "tiktok.com"];
 
+// Thứ tự ưu tiên: Google Maps → Facebook → Travel blogs → Travel communities
 const PREFERRED_DOMAINS = [
+  // Tier 1: Google Maps / Google Reviews
+  "google.com/maps",
+  "maps.google.com",
+  // Tier 2: Facebook public posts/groups
+  "facebook.com",
+  // Tier 3: Travel blogs
   "vnexpress.net",
   "kenh14.vn",
   "dantri.com.vn",
-  "tripadvisor.com",
-  "reddit.com",           // r/VietNam — discussion thật, public
-  "facebook.com",         // public post/group indexed bởi Google
-  "agoda.com",
-  "traveloka.com",
-  "foody.vn",
+  "mia.vn",
+  "dulichviet.com.vn",
   "baomoi.com",
+  // Tier 4: Travel communities & booking platforms
+  "tripadvisor.com",
+  "traveloka.com",
+  "trip.com",
+  "agoda.com",
+  "foody.vn",
+  "ivivu.com",
+  "reddit.com",
 ];
 
 // Giới hạn số nguồn mỗi domain để đa dạng hóa
@@ -44,9 +53,12 @@ async function searchBrave(query, count = 8) {
 
 function sortByQuality(urls) {
   return [...urls].sort((a, b) => {
-    const ai = PREFERRED_DOMAINS.findIndex((d) => a.includes(d));
-    const bi = PREFERRED_DOMAINS.findIndex((d) => b.includes(d));
-    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+    // So sánh theo thứ tự ưu tiên (PREFERRED_DOMAINS dùng substring match)
+    const rank = (url) => {
+      const idx = PREFERRED_DOMAINS.findIndex((d) => url.includes(d));
+      return idx === -1 ? 999 : idx;
+    };
+    return rank(a) - rank(b);
   });
 }
 
@@ -101,10 +113,10 @@ async function fetchGoogleMapsReviews(destination, maxChars = 3000) {
 
 async function gatherReviews(destination, maxExtract = 5) {
   const queries = [
-    `${destination} review đánh giá kinh nghiệm du lịch`,
-    `${destination} có nên đi không ưu nhược điểm`,
-    `site:reddit.com ${destination} travel`,
-    `site:facebook.com ${destination} review`,
+    `${destination} google maps đánh giá review nhận xét`,          // Google Maps reviews
+    `site:facebook.com ${destination} review đánh giá kinh nghiệm`, // Facebook posts
+    `${destination} review blog kinh nghiệm du lịch`,               // Travel blogs
+    `${destination} traveloka tripadvisor trip.com đánh giá`,        // Travel communities
   ];
 
   // Chạy tất cả Brave queries SONG SONG thay vì tuần tự → tiết kiệm ~30s
