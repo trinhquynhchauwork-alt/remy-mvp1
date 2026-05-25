@@ -14,22 +14,6 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", service: "Remy AI Travel Review" });
 });
 
-// Debug endpoint — xóa sau khi fix
-app.get("/debug", async (_req, res) => {
-  const axios = require("axios");
-  const results = { groq_key: !!process.env.GROQ_API_KEY, brave_key: !!process.env.BRAVE_API_KEY };
-  try {
-    const r = await axios.post(
-      "https://api.groq.com/openai/v1/chat/completions",
-      { model: "llama-3.1-8b-instant", messages: [{ role: "user", content: "Say OK" }], max_tokens: 5 },
-      { headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}`, "Content-Type": "application/json" }, timeout: 10000 }
-    );
-    results.groq_test = r.data.choices[0].message.content;
-  } catch (e) {
-    results.groq_error = e.message;
-  }
-  res.json(results);
-});
 
 // ── Full analysis (first message) ─────────────────────
 app.post("/api/analyze", async (req, res) => {
