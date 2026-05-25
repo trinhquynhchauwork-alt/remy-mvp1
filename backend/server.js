@@ -72,15 +72,28 @@ app.post("/api/smart", async (req, res) => {
       });
       return res.json({ type: "analysis", data: result });
     } else {
-      // Follow-up: search thêm theo đúng câu hỏi cụ thể
+      // Follow-up: search thêm theo đúng câu hỏi → trả về structured card
       const destination = context?.destination || "";
-      console.log(`[smart] follow-up search: "${destination} + ${message.slice(0, 40)}"`);
+      console.log(`[smart] follow-up search: "${destination} – ${message.slice(0, 50)}"`);
       const extraData = await gatherReviewsQuick(destination, message);
       console.log(`[smart] extra reviews: ${extraData.texts.length} texts`);
 
-      const fullHistory = [...history, { role: "user", content: message }];
-      const reply = await chatFollowUp(fullHistory, context, extraData.texts);
-      return res.json({ type: "chat", reply });
+      if (extraData.texts.length > 0) {
+        // Có data → phân tích thành structured card, focus vào câu hỏi
+        const result = await analyzeReviews(destination, extraData, message);
+        result.sources = extraData.texts.map((t) => {
+          let domain = t.url;
+          try { domain = new URL(t.url).hostname.replace(/^www\./, ""); } catch {}
+          const title = t.text.split("\n").find((l) => l.trim().length > 15)?.slice(0, 90) || domain;
+          return { url: t.url, domain, title };
+        });
+        return res.json({ type: "analysis", data: result });
+      } else {
+        // Không tìm được gì → chat fallback
+        const fullHistory = [...history, { role: "user", content: message }];
+        const reply = await chatFollowUp(fullHistory, context, []);
+        return res.json({ type: "chat", reply });
+      }
     }
   } catch (err) {
     console.error("[smart error]", err.message);

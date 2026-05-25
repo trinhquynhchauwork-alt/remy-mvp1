@@ -82,7 +82,7 @@ async function extractDestination(question) {
   }
 }
 
-async function analyzeReviews(destination, reviewData) {
+async function analyzeReviews(destination, reviewData, focusQuestion = null) {
   const { texts = [], sources_found = 0 } = reviewData;
 
   const combined = texts
@@ -93,16 +93,21 @@ async function analyzeReviews(destination, reviewData) {
     .join("\n\n")
     .slice(0, 8000) || "Không tìm thấy đủ nội dung review cho địa điểm này.";
 
+  const focusPart = focusQuestion
+    ? `\nFOCUS CÂU HỎI: "${focusQuestion}" — liked/complaints/truth_patterns phải tập trung trả lời câu hỏi này.\n`
+    : "";
+
   const userMessage =
-    `Phân tích các đánh giá về "${destination}".\n\n` +
-    `Tổng URLs tìm được: ${sources_found} | Đã đọc nội dung: ${texts.length} nguồn\n\n` +
+    `Phân tích các đánh giá về "${destination}".\n` +
+    focusPart +
+    `\nTổng URLs tìm được: ${sources_found} | Đã đọc nội dung: ${texts.length} nguồn\n\n` +
     `NỘI DUNG REVIEW:\n${combined}\n\n` +
     `YÊU CẦU:\n` +
     `- "sources_analyzed" = ${sources_found}\n` +
-    `- liked: 3-5 điểm nổi bật\n` +
+    `- liked: 3-5 điểm nổi bật (liên quan câu hỏi nếu có focus)\n` +
     `- complaints: 2-4 vấn đề phổ biến\n` +
     `- truth_patterns: 2-3 patterns thú vị\n` +
-    `- follow_up_questions: 3 câu hỏi người đọc muốn biết tiếp\n` +
+    `- follow_up_questions: 3 câu hỏi tiếp theo phù hợp\n` +
     `Trả về JSON object hợp lệ theo schema đã định nghĩa.`;
 
   try {
